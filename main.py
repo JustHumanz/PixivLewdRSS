@@ -1,6 +1,7 @@
 import requests,argparse,schedule,time
 
 BaseURL = "https://www.pixiv.net/en/artworks/"
+UserURL = "https://www.pixiv.net/en/users/"
 ProxyURL = "https://cdn.humanz.moe/pixiv/?pixivURL="
 
 class PixivLewd:
@@ -11,28 +12,61 @@ class PixivLewd:
         self.Session = Session
         self.Tag = Tag.split(",")
         self.ListLewd = []
+        self.Ignore = None
+        self.NiggerList = None
+
         print("Lewd tags: ", Tag)
         
     def AddWebhook(self,hook):
+        print("Add discord webhook",hook)
         self.WebHook = hook
+
+    def AddBlackList(self,nigger):
+        self.NiggerList = nigger.lower().split(",")
+        print("Add Nigg list",self.NiggerList)
+
+    def AddSkip(self,skip):
+        self.Ignore = skip.split(",")
+        print("Ignore some hashtag",self.Ignore)
 
     def GetLewdFist(self):
         for Tag in self.Tag:
             req = requests.get("https://www.pixiv.net/ajax/search/artworks/" + Tag + "?word=" + Tag + "&order=date_d&mode=r18&p=1&s_mode=s_tag&type=all&lang=en",headers=GetHeaders(self.Session))
             data = req.json()
-            for PixivID in data['body']['illustManga']['data']:
+            for PixivID in data['body']['illustManga']['data']:         
                 self.ListLewd.append(PixivID['id'])
+    def IllustDetail(self,id):
+        req = requests.get("https://www.pixiv.net/ajax/illust/"+id,headers=GetHeaders(self.Session))
+        data = req.json()        
+        return data["body"]
+
     def CheckLewd(self):
         """
         docstring
         """
         for Tag in self.Tag:
+            print("Check "+Tag+" Lewd")
             req = requests.get("https://www.pixiv.net/ajax/search/artworks/" + Tag + "?word=" + Tag + "&order=date_d&mode=r18&p=1&s_mode=s_tag&type=all&lang=en",headers=GetHeaders(self.Session))
             data = req.json()
             for PixivID in data['body']['illustManga']['data']:
-                if PixivID['id'] not in PixivID:
+                if self.NiggerList != None:
+                    for Nigg in self.NiggerList:
+                        if Nigg.lower() == PixivID["userName"].lower():
+                            print("Bann Arts "+PixivID['id'])
+                            continue
+
+                if self.Ignore != None:
+                    for skp in self.Ignore:
+                        if skp in PixivID['tags']:
+                            print("Skip lur "+PixivID['id'])
+                            continue
+
+
+                if PixivID['id'] not in self.ListLewd:
                     print("New fanart "+BaseURL+PixivID['id'])
                     self.ListLewd.append(PixivID['id'])
+                    del self.ListLewd[0]
+                    IllustData = self.IllustDetail(PixivID['id'])                    
                     if self.WebHook != None:
                         Payload = {
                         "avatar_url": ProxyURL+PixivID["profileImageUrl"],
@@ -42,10 +76,11 @@ class PixivLewd:
                                 "url": BaseURL+PixivID["id"],
                                 "author": {
                                     "name": PixivID["userName"],
+                                    "url": UserURL+IllustData['userId'],
                                     "icon_url": ProxyURL+PixivID["profileImageUrl"]
                                 },
                                 "image": {
-                                    "url": ProxyURL+PixivID["url"]
+                                    "url": ProxyURL+IllustData["urls"]["regular"]
                                 }
                                 }
                             ]
@@ -80,13 +115,19 @@ def main():
     parser.add_argument('-s','--Session', required=True,help="Pixivi SessionID")
     parser.add_argument('-t','--Tag',required=True,help="Pixiv tag(separated by commas)")
     parser.add_argument('-w','--Webhook',help="Discord webhook")
+    parser.add_argument('-b','--Banned',help="Ignore artis fanart(separated by commas)")
+    parser.add_argument('-i','--Ignore',help="Skip hashtag(separated by commas)")
     args = parser.parse_args()
     Lewd = PixivLewd(args.Session,args.Tag)
-    if args.Webhook != "":
+    if args.Webhook != None:
         Lewd.AddWebhook(args.Webhook)
+    if args.Banned != None:
+        Lewd.AddBlackList(args.Banned)
+    if args.Ignore != None:
+        Lewd.AddSkip(args.Ignore)
 
     Lewd.GetLewdFist()
-    schedule.every(1).hours.do(Lewd.CheckLewd)
+    schedule.every(1).minutes.do(Lewd.CheckLewd)
     while True:
         schedule.run_pending()
         time.sleep(1)
