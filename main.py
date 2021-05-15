@@ -11,9 +11,10 @@ class PixivLewd:
     def __init__(self,Session,Tag):
         self.Session = Session
         self.Tag = Tag.split(",")
-        self.ListLewd = []
+        self.ListLewd = {}
         self.Ignore = None
         self.NiggerList = None
+        self.WebHook = None
 
         print("Lewd tags: ", Tag)
         
@@ -31,10 +32,12 @@ class PixivLewd:
 
     def GetLewdFist(self):
         for Tag in self.Tag:
+            self.ListLewd[Tag] = []
             req = requests.get("https://www.pixiv.net/ajax/search/artworks/" + Tag + "?word=" + Tag + "&order=date_d&mode=r18&p=1&s_mode=s_tag&type=all&lang=en",headers=GetHeaders(self.Session))
             data = req.json()
             for PixivID in data['body']['illustManga']['data']:         
-                self.ListLewd.append(PixivID['id'])
+                self.ListLewd[Tag].append(PixivID['id'])
+
     def IllustDetail(self,id):
         req = requests.get("https://www.pixiv.net/ajax/illust/"+id,headers=GetHeaders(self.Session))
         data = req.json()        
@@ -60,12 +63,11 @@ class PixivLewd:
                         if skp in PixivID['tags']:
                             print("Skip lur "+PixivID['id'])
                             continue
-
-
-                if PixivID['id'] not in self.ListLewd:
+            
+                if PixivID['id'] not in self.ListLewd[Tag]:
                     print("New fanart "+BaseURL+PixivID['id'])
-                    self.ListLewd.append(PixivID['id'])
-                    del self.ListLewd[0]
+                    self.ListLewd[Tag].append(PixivID['id'])
+                    del self.ListLewd[Tag][0]
                     IllustData = self.IllustDetail(PixivID['id'])                    
                     if self.WebHook != None:
                         Payload = {
@@ -127,7 +129,7 @@ def main():
         Lewd.AddSkip(args.Ignore)
 
     Lewd.GetLewdFist()
-    schedule.every(1).hour.do(Lewd.CheckLewd)
+    schedule.every(20).minute.do(Lewd.CheckLewd)
     while True:
         schedule.run_pending()
         time.sleep(1)
