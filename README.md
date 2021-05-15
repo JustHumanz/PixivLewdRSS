@@ -23,3 +23,6 @@ Example:
 #### Get sessionID
 to get pixiv session id you must login,after login open Inspect in browser and find storage then find `PHPSESSID` in name col and copy the value  
 remember to keep safe your session id **DONT SHARE YOUR SESSION ID**
+
+#### Note
+for tag i would recommend you using japanese hashtag rather than latin
