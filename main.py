@@ -129,7 +129,7 @@ def main():
         Lewd.AddSkip(args.Ignore)
 
     Lewd.GetLewdFist()
-    schedule.every(20).minute.do(Lewd.CheckLewd)
+    schedule.every(20).minutes.do(Lewd.CheckLewd)
     while True:
         schedule.run_pending()
         time.sleep(1)
