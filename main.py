@@ -127,7 +127,7 @@ def main():
         Lewd.AddSkip(args.Ignore)
 
     Lewd.GetLewdFist()
-    schedule.every(1).minutes.do(Lewd.CheckLewd)
+    schedule.every(1).hour.do(Lewd.CheckLewd)
     while True:
         schedule.run_pending()
         time.sleep(1)
