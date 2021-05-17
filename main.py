@@ -1,8 +1,9 @@
-import requests,argparse,schedule,time
+import requests,argparse,time,sqlite3
 
 BaseURL = "https://www.pixiv.net/en/artworks/"
 UserURL = "https://www.pixiv.net/en/users/"
 ProxyURL = "https://cdn.humanz.moe/pixiv/?pixivURL="
+PixivIDList = {}
 
 class PixivLewd:
     """
@@ -11,7 +12,6 @@ class PixivLewd:
     def __init__(self,Session,Tag):
         self.Session = Session
         self.Tag = Tag.split(",")
-        self.ListLewd = {}
         self.Ignore = None
         self.NiggerList = None
         self.WebHook = None
@@ -32,11 +32,11 @@ class PixivLewd:
 
     def GetLewdFist(self):
         for Tag in self.Tag:
-            self.ListLewd[Tag] = []
+            PixivIDList[Tag] = []
             req = requests.get("https://www.pixiv.net/ajax/search/artworks/" + Tag + "?word=" + Tag + "&order=date_d&mode=r18&p=1&s_mode=s_tag&type=all&lang=en",headers=GetHeaders(self.Session))
             data = req.json()
             for PixivID in data['body']['illustManga']['data']:         
-                self.ListLewd[Tag].append(PixivID['id'])
+                PixivIDList[Tag].append(PixivID['id'])
 
     def IllustDetail(self,id):
         req = requests.get("https://www.pixiv.net/ajax/illust/"+id,headers=GetHeaders(self.Session))
@@ -64,10 +64,10 @@ class PixivLewd:
                             print("Skip lur "+PixivID['id'])
                             continue
             
-                if PixivID['id'] not in self.ListLewd[Tag]:
+                if PixivID['id'] not in PixivIDList[Tag]:
                     print("New fanart "+BaseURL+PixivID['id'])
-                    self.ListLewd[Tag].append(PixivID['id'])
-                    del self.ListLewd[Tag][0]
+                    PixivIDList[Tag].append(PixivID['id'])
+                    del PixivIDList[Tag][0]
                     IllustData = self.IllustDetail(PixivID['id'])                    
                     if self.WebHook != None:
                         Payload = {
@@ -93,8 +93,7 @@ class PixivLewd:
                         except requests.exceptions.HTTPError as err:
                             print(err)
                         else:
-                            print("Payload delivered successfully, code {}.".format(result.status_code))                        
-                        
+                            print("Payload delivered successfully, code {}.".format(result.status_code))                              
 
         
 def GetHeaders(s :str):
@@ -129,8 +128,8 @@ def main():
         Lewd.AddSkip(args.Ignore)
 
     Lewd.GetLewdFist()
-    schedule.every(20).minutes.do(Lewd.CheckLewd)
     while True:
-        schedule.run_pending()
-        time.sleep(1)
+        Lewd.CheckLewd()
+        time.sleep(60)
+
 main()   
