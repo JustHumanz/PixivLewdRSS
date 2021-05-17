@@ -3,8 +3,16 @@ import requests,argparse,time,sqlite3
 BaseURL = "https://www.pixiv.net/en/artworks/"
 UserURL = "https://www.pixiv.net/en/users/"
 ProxyURL = "https://cdn.humanz.moe/pixiv/?pixivURL="
-PixivIDList = {}
 
+CreateDB = """
+CREATE TABLE IF NOT EXISTS "Pixiv" (
+	"id"	INTEGER NOT NULL,
+	"IlustID"	TEXT NOT NULL,
+	"AuthorID"	TEXT NOT NULL,
+	"PicURL"	TEXT NOT NULL,
+	"Hashtag"	TEXT NOT NULL,
+	PRIMARY KEY("id" AUTOINCREMENT)
+);"""
 class PixivLewd:
     """
     docstring
@@ -12,9 +20,14 @@ class PixivLewd:
     def __init__(self,Session,Tag):
         self.Session = Session
         self.Tag = Tag.split(",")
+        self.SqlConn = sqlite3.connect('./Pixiv.sql')
         self.Ignore = None
         self.NiggerList = None
         self.WebHook = None
+        self.BannedList = []
+        Conn = self.SqlConn.cursor()
+        Conn.execute(CreateDB)
+        self.SqlConn.commit()
 
         print("Lewd tags: ", Tag)
         
@@ -31,12 +44,17 @@ class PixivLewd:
         print("Ignore some hashtag",self.Ignore)
 
     def GetLewdFist(self):
+        self.SqlCursor = self.SqlConn.cursor()
         for Tag in self.Tag:
-            PixivIDList[Tag] = []
             req = requests.get("https://www.pixiv.net/ajax/search/artworks/" + Tag + "?word=" + Tag + "&order=date_d&mode=r18&p=1&s_mode=s_tag&type=all&lang=en",headers=GetHeaders(self.Session))
             data = req.json()
-            for PixivID in data['body']['illustManga']['data']:         
-                PixivIDList[Tag].append(PixivID['id'])
+            for PixivID in data['body']['illustManga']['data']:   
+                self.SqlCursor.execute("select id from Pixiv where IlustID=:PixivID",{"PixivID": PixivID['id']})
+                result  = self.SqlCursor.fetchall()
+                if len(result) == 0:                
+                    IllustData = self.IllustDetail(PixivID['id'])
+                    self.SqlCursor.execute("insert into Pixiv values (?,?,?,?,?)", (None,PixivID["id"],IllustData['userId'],IllustData["urls"]["original"],Tag))      
+        self.SqlConn.commit()
 
     def IllustDetail(self,id):
         req = requests.get("https://www.pixiv.net/ajax/illust/"+id,headers=GetHeaders(self.Session))
@@ -47,14 +65,19 @@ class PixivLewd:
         """
         docstring
         """
+        self.SqlCursor = self.SqlConn.cursor()
         for Tag in self.Tag:
             print("Check "+Tag+" Lewd")
             req = requests.get("https://www.pixiv.net/ajax/search/artworks/" + Tag + "?word=" + Tag + "&order=date_d&mode=r18&p=1&s_mode=s_tag&type=all&lang=en",headers=GetHeaders(self.Session))
             data = req.json()
             for PixivID in data['body']['illustManga']['data']:
+                if PixivID['id'] in self.BannedList:
+                    continue
+                
                 if self.NiggerList != None:
                     for Nigg in self.NiggerList:
                         if Nigg.lower() == PixivID["userName"].lower():
+                            self.BannedList.append(PixivID['id'])
                             print("Bann Arts "+PixivID['id'])
                             continue
 
@@ -62,13 +85,15 @@ class PixivLewd:
                     for skp in self.Ignore:
                         if skp in PixivID['tags']:
                             print("Skip lur "+PixivID['id'])
+                            self.BannedList.append(PixivID['id'])
                             continue
-            
-                if PixivID['id'] not in PixivIDList[Tag]:
+
+                self.SqlCursor.execute("select id from Pixiv where IlustID=:PixivID",{"PixivID": PixivID['id']})
+                result  = self.SqlCursor.fetchall()
+                if len(result) == 0:
                     print("New fanart "+BaseURL+PixivID['id'])
-                    PixivIDList[Tag].append(PixivID['id'])
-                    del PixivIDList[Tag][0]
-                    IllustData = self.IllustDetail(PixivID['id'])                    
+                    IllustData = self.IllustDetail(PixivID['id'])                                        
+                    self.SqlCursor.execute("insert into Pixiv values (?,?,?,?,?)", (None,PixivID["id"],IllustData['userId'],IllustData["urls"]["original"],Tag))      
                     if self.WebHook != None:
                         Payload = {
                         "avatar_url": ProxyURL+PixivID["profileImageUrl"],
@@ -94,7 +119,7 @@ class PixivLewd:
                             print(err)
                         else:
                             print("Payload delivered successfully, code {}.".format(result.status_code))                              
-
+        self.SqlConn.commit()
         
 def GetHeaders(s :str):
     palabapakkau = {
