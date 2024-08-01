@@ -2,7 +2,7 @@ import requests,argparse,time,sqlite3
 
 BaseURL = "https://www.pixiv.net/en/artworks/"
 UserURL = "https://www.pixiv.net/en/users/"
-ProxyURL = "https://cdn.humanz.moe/pixiv/?pixivURL="
+ProxyURL = "https://storage.humanz.moe/pixiv/?pixivURL="
 
 CreateDB = """
 CREATE TABLE IF NOT EXISTS "Pixiv" (
